@@ -1,0 +1,41 @@
+import requests
+import os
+import datetime
+from requests.auth import HTTPBasicAuth
+
+# Configurations (Replace with environment variables)
+client_id = os.getenv('SFMC_CLIENT_ID')
+client_secret = os.getenv('SFMC_CLIENT_SECRET')
+auth_url = 'https://YOUR_SUBDOMAIN.auth.marketingcloudapis.com/v2/token'
+api_base_url = 'https://YOUR_SUBDOMAIN.rest.marketingcloudapis.com'
+backup_location = 'path/to/backup/directory'
+
+# Authenticate and get token
+def get_access_token():
+    response = requests.post(auth_url, auth=HTTPBasicAuth(client_id, client_secret), data={'grant_type': 'client_credentials'})
+    return response.json().get('access_token')
+
+# Fetch updated/new content blocks
+def fetch_content_blocks(access_token, last_run_date):
+    headers = {'Authorization': f'Bearer {access_token}'}
+    response = requests.get(f'{api_base_url}/asset/v1/content/assets?$filter=modifiedDate ge {last_run_date}', headers=headers)
+    return response.json().get('items', [])
+
+# Save content locally
+def save_content(content, backup_path):
+    for item in content:
+        file_name = f"{item['id']}_{item['name']}.json"
+        with open(os.path.join(backup_path, file_name), 'w') as file:
+            file.write(str(item))
+
+# Main function
+if __name__ == '__main__':
+    token = get_access_token()
+    last_run = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S')
+    today = datetime.datetime.now().strftime('backup_%Y%m%d')
+    backup_path = os.path.join(backup_location, today)
+    os.makedirs(backup_path, exist_ok=True)
+    
+    content_blocks = fetch_content_blocks(token, last_run)
+    save_content(content_blocks, backup_path)
+    print(f'Backup completed with {len(content_blocks)} content blocks.')
